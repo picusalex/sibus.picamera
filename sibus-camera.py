@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from flask import Flask, render_template, Response, jsonify, send_file, abort
+
 import numpy as np
 import cv2
 import time, sys, os, datetime
+import threading 
+
 import logging
 logger = logging.getLogger("rasp-camera")
 logger.setLevel(logging.DEBUG)
@@ -12,46 +16,71 @@ stream_formatter = logging.Formatter('%(asctime)s|%(levelname)08s | %(message)s'
 steam_handler.setFormatter(stream_formatter)
 logger.addHandler(steam_handler)
 
-CAMERA_IDX = 0
+from VideoStream.videostream import VideoStream
+
 SNAPSHOT_ARCHIVES_DIR = "./output"
-SNAPSHOT_TMP_DIR = "/tmp/"
+SNAPSHOT_TMP_DIR = "/tmp"
 
 class OpenCamera():
-	def __init__(self, idx):
-		self._idx = idx
+	def __init__(self, stream):
+		self._stream = stream		
+		self._name = stream.name
+		self.check_filesystem()
 		
-		self.connect_camera()	
+		self.start_stream()
+		
+	def start_stream(self):
+		logger.info("OpenCamera: starting %s"%self._stream.name)
+		self._stream.start()
 
-	def isOpened(self):
-		return self.__capture_intf.isOpened()
+	def stop_stream(self):
+		logger.info("OpenCamera: stoping %s"%self._stream.name)
+		self._stream.stop()
 		
-	def connect_camera(self):
-		self.__capture_intf = None
-		logger.info("Connecting to camera %d"%self._idx)
-		self.__capture_intf = cv2.VideoCapture(self._idx)
-		time.sleep(1)
+	def get_frame(self):
+		frame = self._stream.read()
+		frame = cv2.flip( frame, -1 )
+		datetime_now = str(datetime.datetime.now())
 		
-		if self.isOpened():
-			logger.info("Connected to camera %d"%self._idx)
-			return
-		else:
-			logger.error("!! Impossible to connect to camera %d"%self._idx)
-			self.cap = None
+		cv2.putText(img = frame, 
+                        text = datetime_now,
+                        org = (10,20), 
+                        fontFace = cv2.FONT_HERSHEY_DUPLEX, 
+                        fontScale = 0.5, 
+                        color = (230,230,230),
+                        thickness = 1, 
+                        lineType = cv2.CV_AA)
+
+		return frame
 	
+	def get_jpeg(self):
+		frame = self.get_frame()
+		if frame is not None:
+			ret, jpeg = cv2.imencode('.jpg', frame)
+			self._current_jpeg = jpeg
+			return jpeg   
+		else:
+			return None
+
 	def check_filesystem(self):
-		self.archive_folder = os.path.realpath(SNAPSHOT_ARCHIVES_DIR)
+		self.archive_folder = os.path.join(os.path.realpath(SNAPSHOT_ARCHIVES_DIR), self._name)
 		logger.debug("SNAPSHOT: archive folder = %s"%self.archive_folder)
 		if not os.path.isdir(self.archive_folder):
 			os.makedirs(self.archive_folder)
 
-		self.live_snapshot = os.path.join(os.path.realpath(SNAPSHOT_TMP_DIR), "rasp-camera-live.png")
-		self.live_snapshot_md = os.path.join(os.path.realpath(SNAPSHOT_TMP_DIR), "rasp-camera-live.png.txt")
+		self.live_snapshot = os.path.join(os.path.realpath(SNAPSHOT_TMP_DIR), "%s-live.jpg"%str(self._name))
+		self.live_snapshot_md = os.path.join(os.path.realpath(SNAPSHOT_TMP_DIR), "%s-live.dat"%str(self._name))
 		logger.debug("SNAPSHOT: live snapshot = %s"%self.live_snapshot)
 		logger.debug("SNAPSHOT: live snapshot metadata = %s"%self.live_snapshot_md)
 		if not os.path.isdir(os.path.realpath(SNAPSHOT_TMP_DIR)):
 			os.makedirs(os.path.realpath(SNAPSHOT_TMP_DIR))		
 
-	def archive_snapshot(self, frame):
+	def archive_snapshot(self, mins=1):
+		frame = self.get_frame()
+		if frame is None:
+			logger.error("ERROR getting snapshot to archive !")
+			return
+		
 		pattern = "%Y-%m-%dT%H:%M:%S.%fZ"
 		if not os.path.isfile(self.live_snapshot_md):
 			with open(self.live_snapshot_md, "w") as file:
@@ -63,80 +92,104 @@ class OpenCamera():
 			lastdate = datetime.datetime.strptime(t, pattern)
 	
 		currentdate = datetime.datetime.now()		
-		logger.debug("SNAPSHOT ARCHIVE: last snapshot = %s"%(str(currentdate - lastdate)))
+		delta = datetime.timedelta(minutes=mins)
+		logger.debug("SNAPSHOT ARCHIVE: last snapshot = %s / %s"%(str(currentdate - lastdate), str(delta)))
 		
-		if lastdate is None or (currentdate - lastdate) > datetime.timedelta(minutes=15):			
+		if lastdate is None or (currentdate - lastdate) > delta:			
 			archive_folder = os.path.join(self.archive_folder, 
 									str(currentdate.year), 
-									str(currentdate.month)) 
+									"%0.2d"%currentdate.month,
+									"%0.2d"%currentdate.day) 
 			if not os.path.isdir(archive_folder):
 				os.makedirs(archive_folder)			
 			
-			archive_file = os.path.join(archive_folder,"%s-snapshot.png"%currentdate.strftime("%Y%m%d-%H%M%S-%f"))
+			archive_file = os.path.join(archive_folder,"%s.jpg"%currentdate.strftime("snap-%H-%M-%S"))
 			logger.info("SNAPSHOT ARCHIVE: archiving snapshot : %s"%archive_file)
-			
 			cv2.imwrite(archive_file,frame)
 			with open(self.live_snapshot_md, "w") as file:
 				file.write(str(currentdate.strftime(pattern)))
-			
-			
-	def write_snapshot(self, frame):
+		else:
+			logger.info("SNAPSHOT ARCHIVE: NOT archiving yet. %s left"%str(delta - (currentdate - lastdate)))
+	
+	
+	def write_snapshot(self):
+		frame = self.get_frame()
+		if frame is None:
+			logger.error("ERROR getting snapshot to write !")
+			return
+		
 		logger.info("SNAPSHOT: Saving frame to file %s"%self.live_snapshot)
 		cv2.imwrite(self.live_snapshot,frame)
-		
-		self.archive_snapshot(frame)
-		logger.debug("SNAPSHOT: done with success !")
-	
-	def take_snapshot(self):
-		if not self.isOpened():
-			raise "snapshot error : camera %d not opened !"%self._idx
-		
-		self.check_filesystem()
-		
-		logger.info("+++++++++++++++++++++++++++++++++++++++++++++++")
-		logger.info("SNAPSHOT: Reading frame from camera %d"%self._idx)
-		ret, frame = self.__capture_intf.read()
-		logger.debug("SNAPSHOT: return from read camera = %s"%str(ret))
-		
-		if ret:
-			self.write_snapshot(frame)
-			return
-		else:
-			logger.error("SNAPSHOT: !! invalid frame from camera")
-			logger.debug("SNAPSHOT: !! error during process !")
-			raise "snapshot error : invalid frame from camera"
+		logger.debug("SNAPSHOT: done with success !")			
 
-
-if __name__ == "__main__":
-	logger.info("####################################################")
-	logger.info("rasp-camera starting...")
-	
-	try:
-		cap = OpenCamera(CAMERA_IDX)
+picam = VideoStream(usePiCamera=True)
+webcam = VideoStream(src=1)
 		
-		while(cap.isOpened()):
-			cap.take_snapshot()
-			time.sleep(0.5)
-		
-		logger.warning("Camera %d disconnected. Exiting."%CAMERA_IDX)
-		logger.info("rasp-camera stopped")
-		logger.info("####################################################")				
-		cap.release()
-		sys.exit(1)			
-			
-	except (KeyboardInterrupt):
-		logger.info("Ctrl+C detected !")
-		logger.info("rasp-camera stopped")
-		logger.info("####################################################")				
-		sys.exit(0)		
-	except Exception as e:
-		logger.exception("Exception in program detected ! \n" + str(e))
-		logger.info("rasp-camera stopped")
-		logger.info("####################################################")				
-		sys.exit(1)
-	
-	cap.release()
-	sys.exit(0)		
-	
-	
+cameras = [OpenCamera(picam), OpenCamera(webcam)]		
 
+def gen(camera):
+	while True:
+		jpeg = camera.get_jpeg()
+		
+		if jpeg is not None:
+			#time.sleep(0.1)
+			yield (b'--frame\r\n'
+					b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+
+def snap(camera):
+	jpeg = camera.get_jpeg()
+	if jpeg is not None:
+		return jpeg.tobytes()
+	else:
+		return abort(404)
+	
+def archive_thread_func():
+    while(1):
+      for cam in cameras:
+		cam.archive_snapshot()
+      time.sleep(10)
+    
+archive_thread = threading.Thread(None, archive_thread_func, None, (), {}) 
+
+app = Flask(__name__)
+@app.route("/")
+@app.route("/index.html")
+def index():
+  return render_template('index.html')
+  
+"""@app.route("/<page>")
+def page(page):
+  return render_template(page)  """
+
+@app.route("/camera.html")
+def camera_page():
+  return render_template('camera.html')    
+  
+@app.route("/video_feed/<int:idx>")
+def video_feed(idx):
+	return Response(gen(cameras[idx]), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/snapshot/<int:idx>")
+def snapshot(idx):
+	return Response(snap(cameras[idx]), mimetype="image/jpeg;")
+
+@app.route("/archives")
+@app.route("/archives/")
+@app.route("/archives/<path:path>")
+def list_archives(path="."):
+	logger.info("Listing archives in %s"%path)
+	root_dir = os.path.realpath(SNAPSHOT_ARCHIVES_DIR)
+	full_path = os.path.join(root_dir, path)
+	
+	if os.path.isdir(full_path):
+		subdirs = sorted([f for f in os.listdir(full_path) if os.path.isdir(os.path.join(full_path, f))], reverse=True)
+		files = sorted([f for f in os.listdir(full_path) if os.path.isfile(os.path.join(full_path, f))], reverse=True)
+		return jsonify({"files": files, "dirs": subdirs})
+	
+	if os.path.isfile(full_path):
+		return send_file(full_path, mimetype="image/png;")
+	
+	
+if __name__ == '__main__':
+  archive_thread.start()
+  app.run(host='0.0.0.0', threaded=True)

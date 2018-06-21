@@ -17,7 +17,13 @@ fi
 
 echo " + Installing dependency packages"
 sudo apt-get -y install python
+sudo apt-get -y install python-pip
 sudo apt-get -y install python-opencv
+echo " + done"
+
+echo " + Installing dependency PIP packages"
+sudo pip install Flask
+sudo pip install picamera
 echo " + done"
 
 echo " + Creating supervisor service"
