@@ -1,5 +1,6 @@
 # import the necessary packages
 from .webcamvideostream import WebcamVideoStream
+import cv2
 
 class VideoStream:
 	def __init__(self, src=0, usePiCamera=False, resolution=(640, 480),
@@ -41,6 +42,15 @@ class VideoStream:
 	def stop(self):
 		# stop the thread and release any resources
 		self.stream.stop()
+		
+	def equalized_frame(self):
+		img = self.read()
+		ycrcb = cv2.cvtColor(img,cv2.COLOR_BGR2YCR_CB)
+		channels = cv2.split(ycrcb)
+		cv2.equalizeHist(channels[0],channels[0])
+		cv2.merge(channels,ycrcb)
+		cv2.cvtColor(ycrcb,cv2.COLOR_YCR_CB2BGR,img)
+		return img
 		
 		
 		

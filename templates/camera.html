@@ -77,14 +77,17 @@
 								
 				  			</div>
 				  			<div class="content-box-large box-with-header">
-								<table class="table table-condensed">
-								  <tbody id="folder_table_view" cur_path="">
-								  </tbody>
-								</table>
+								<div style="overflow-y:auto; height:400px;">
+									<table class="table table-condensed">
+									  <tbody id="folder_table_view" cur_path="">
+									  </tbody>
+									</table>
+								</div>
 							</div>
 		  				</div>
 		  			</div>
 				</div>
+				
 				<div class="col-md-6">
 		  			<div class="row">
 		  				<div class="col-md-12">
@@ -94,7 +97,12 @@
 				  			</div>
 				  			<div class="content-box-large box-with-header">
 								<img id="picture_view" src="null" max-height="400" width="100%" />
+								
+								<div class="slidecontainer"> 
+								  <input type="range" min="0" max="100" value="0" class="slider" id="sliderImage" style="width:100%">
+								</div>
 							</div>
+							
 		  				</div>
 		  			</div>
 		  		</div>

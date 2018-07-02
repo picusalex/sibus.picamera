@@ -30,11 +30,11 @@ class OpenCamera():
 		self.start_stream()
 		
 	def start_stream(self):
-		logger.info("OpenCamera: starting %s"%self._stream.name)
+		logger.info("OpenCamera: starting %s"%self._name)
 		self._stream.start()
 
 	def stop_stream(self):
-		logger.info("OpenCamera: stoping %s"%self._stream.name)
+		logger.info("OpenCamera: stoping %s"%self._name)
 		self._stream.stop()
 		
 	def get_frame(self):
@@ -64,21 +64,21 @@ class OpenCamera():
 
 	def check_filesystem(self):
 		self.archive_folder = os.path.join(os.path.realpath(SNAPSHOT_ARCHIVES_DIR), self._name)
-		logger.debug("SNAPSHOT: archive folder = %s"%self.archive_folder)
+		logger.debug("FILESYSTEM %s: archive folder = %s"%(self._name, self.archive_folder))
 		if not os.path.isdir(self.archive_folder):
 			os.makedirs(self.archive_folder)
 
 		self.live_snapshot = os.path.join(os.path.realpath(SNAPSHOT_TMP_DIR), "%s-live.jpg"%str(self._name))
 		self.live_snapshot_md = os.path.join(os.path.realpath(SNAPSHOT_TMP_DIR), "%s-live.dat"%str(self._name))
-		logger.debug("SNAPSHOT: live snapshot = %s"%self.live_snapshot)
-		logger.debug("SNAPSHOT: live snapshot metadata = %s"%self.live_snapshot_md)
+		logger.debug("FILESYSTEM %s: live snapshot = %s"%(self._name, self.live_snapshot))
+		logger.debug("FILESYSTEM %s: live snapshot metadata = %s"%(self._name, self.live_snapshot_md))
 		if not os.path.isdir(os.path.realpath(SNAPSHOT_TMP_DIR)):
 			os.makedirs(os.path.realpath(SNAPSHOT_TMP_DIR))		
 
-	def archive_snapshot(self, mins=1):
+	def archive_snapshot(self, mins=15):
 		frame = self.get_frame()
 		if frame is None:
-			logger.error("ERROR getting snapshot to archive !")
+			logger.error("ERROR %s: getting snapshot to archive !"%self._name)
 			return
 		
 		pattern = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -93,7 +93,7 @@ class OpenCamera():
 	
 		currentdate = datetime.datetime.now()		
 		delta = datetime.timedelta(minutes=mins)
-		logger.debug("SNAPSHOT ARCHIVE: last snapshot = %s / %s"%(str(currentdate - lastdate), str(delta)))
+		logger.debug("ARCHIVE %s: last snapshot = %s / %s"%(self._name, str(currentdate - lastdate), str(delta)))
 		
 		if lastdate is None or (currentdate - lastdate) > delta:			
 			archive_folder = os.path.join(self.archive_folder, 
@@ -104,12 +104,12 @@ class OpenCamera():
 				os.makedirs(archive_folder)			
 			
 			archive_file = os.path.join(archive_folder,"%s.jpg"%currentdate.strftime("snap-%H-%M-%S"))
-			logger.info("SNAPSHOT ARCHIVE: archiving snapshot : %s"%archive_file)
+			logger.info("ARCHIVE %s: archiving snapshot : %s"%(self._name,archive_file))
 			cv2.imwrite(archive_file,frame)
 			with open(self.live_snapshot_md, "w") as file:
 				file.write(str(currentdate.strftime(pattern)))
 		else:
-			logger.info("SNAPSHOT ARCHIVE: NOT archiving yet. %s left"%str(delta - (currentdate - lastdate)))
+			logger.info("ARCHIVE %s: NOT archiving yet. %s left"%(self._name, str(delta - (currentdate - lastdate))))
 	
 	
 	def write_snapshot(self):
@@ -118,9 +118,9 @@ class OpenCamera():
 			logger.error("ERROR getting snapshot to write !")
 			return
 		
-		logger.info("SNAPSHOT: Saving frame to file %s"%self.live_snapshot)
+		logger.info("WRITE %s: Saving frame to file %s"%(self._name, self.live_snapshot))
 		cv2.imwrite(self.live_snapshot,frame)
-		logger.debug("SNAPSHOT: done with success !")			
+		logger.debug("WRITE %s: done with success !"%self._name)			
 
 picam = VideoStream(usePiCamera=True)
 webcam = VideoStream(src=1)
