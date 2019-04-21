@@ -22,7 +22,7 @@
 	           <div class="col-md-5">
 	              <!-- Logo -->
 	              <div class="logo">
-	                 <h1><a href="index.html">rasp-car camera</a></h1>
+	                 <h1><a href="index.html">rasp-car timelap</a></h1>
 	              </div>
 	           </div>
 	           <div class="col-md-5">
@@ -63,41 +63,22 @@
                 <ul class="nav">
                     <!-- Main menu -->
                     <li><a href="/index.html"><i class="glyphicon glyphicon-dashboard"></i> Dashboard</a></li>
-                    <li class="current"><a href="camera.html"><i class="glyphicon glyphicon-camera"></i> Camera</a></li>
-                    <li><a href="/timelaps.html"><i class="glyphicon glyphicon-camera"></i> Timelaps</a></li>
+                    <li><a href="/camera.html"><i class="glyphicon glyphicon-camera"></i> Camera</a></li>
+                    <li class="current"><a href="/timelaps.html"><i class="glyphicon glyphicon-camera"></i> Timelaps</a></li>
                 </ul>
              </div>
 		  </div>
 		  <div class="col-md-10">
-		  	<div class="row">
-		  		<div class="col-md-6">
+		  	<div class="row">			
+				<div class="col-md-12">
 		  			<div class="row">
 		  				<div class="col-md-12">
 		  					<div class="content-box-header">
-			  					<div class="panel-title">Archives</div>
+			  					<div class="panel-title">Timelap Viewer</div>
 								
 				  			</div>
-				  			<div class="content-box-large box-with-header">
-								<div style="overflow-y:auto; height:400px;">
-									<table class="table table-condensed">
-									  <tbody id="folder_table_view" cur_path="">
-									  </tbody>
-									</table>
-								</div>
-							</div>
-		  				</div>
-		  			</div>
-				</div>
-				
-				<div class="col-md-6">
-		  			<div class="row">
-		  				<div class="col-md-12">
-		  					<div class="content-box-header">
-			  					<div class="panel-title">Picture Viewer</div>
-								
-				  			</div>
-				  			<div class="content-box-large box-with-header">
-								<img id="picture_view" src="null" max-height="400" width="100%" />
+				  			<div class="content-box-large box-with-header center-block">
+								<img id="picture_view" src="null"  />
 								
 								<div class="slidecontainer"> 
 								  <input type="range" min="0" max="100" value="0" class="slider" id="sliderImage" style="width:100%">
@@ -129,12 +110,12 @@
     <!-- Include all compiled plugins (below), or include individual files as needed -->
     <script src="/static/bootstrap/js/bootstrap.min.js"></script>
     <script src="/static/js/custom.js"></script>
-	<script src="/static/js/camera.js"></script>
+	<script src="/static/js/timelap.js"></script>
 	<script>
 		$(document).ready(function(){
 			pageSetup();
 			
-			populateArchiveTable();
+			populateTimeLap("webcam1");
 			
 		});
 	

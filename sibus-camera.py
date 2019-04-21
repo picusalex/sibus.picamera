@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 import time, sys, os, datetime
 import threading 
+import glob
 
 import logging
 logger = logging.getLogger("rasp-camera")
@@ -164,7 +165,11 @@ def page(page):
 @app.route("/camera.html")
 def camera_page():
   return render_template('camera.html')    
-  
+
+@app.route("/timelaps.html")
+def timelaps_page():
+  return render_template('timelaps.html')    
+      
 @app.route("/video_feed/<int:idx>")
 def video_feed(idx):
 	return Response(gen(cameras[idx]), mimetype="multipart/x-mixed-replace; boundary=frame")
@@ -188,8 +193,49 @@ def list_archives(path="."):
 	
 	if os.path.isfile(full_path):
 		return send_file(full_path, mimetype="image/png;")
-	
-	
+
+def get_image_after_date(camera, year, month, day, hour):
+    root_dir = os.path.realpath(SNAPSHOT_ARCHIVES_DIR)
+    folder_path = os.path.join(root_dir, camera, "%04d"%year, "%02d"%month, "%02d"%day)
+    if not os.path.isdir(folder_path):
+        logger.warning("Folder {} does not exist".format(folder_path))
+        return None
+    
+    files = glob.glob(os.path.join(folder_path, "snap-%02d-*"%hour))
+    if len(files) > 0 and os.path.getsize(files[0]) > 50*1024:
+        return files[0].replace(root_dir, "").strip("/")
+    else:
+        return None    
+    
+    
+def get_images(camera, start_dt, evry_hours):
+    files = []
+    dt = start_dt
+    f = get_image_after_date(camera, dt.year,dt.month,dt.day,dt.hour)
+    while(dt < datetime.datetime.now()):
+        if f is not None:
+            files.append(f)
+        
+        dt = dt + datetime.timedelta(hours=evry_hours)
+        f = get_image_after_date(camera, dt.year,dt.month,dt.day,dt.hour)        
+                
+    return sorted(files, reverse=True)
+    
+@app.route("/timelap/<string:camera>")
+@app.route("/timelap/<string:camera>/<string:start>/<int:evry_hours>")
+def gen_timelap(camera, start=None,evry_hours=4):
+    if start is None:
+        start = "2019-04-14"
+    
+    start_dt = datetime.datetime.strptime(start, '%Y-%m-%d')
+            
+    logger.info("Generating timelap starting on {}, pictures every {} hours".format(start_dt, evry_hours))
+    files = get_images(camera, start_dt, evry_hours)
+    
+    return jsonify({"files": files})
+    
+    
+            
 if __name__ == '__main__':
   archive_thread.start()
   app.run(host='0.0.0.0', threaded=True)
